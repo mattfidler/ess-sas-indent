@@ -51,9 +51,10 @@
 ;; 
 ;;; Code:
 (require 'ess)
+(require 'ess-sas-d)
 
-(defvar ess-sas-tab-width 4)
-(defvar ess-sas-tab-if-else-width 4)
+(defvar ess-sas-tab-width 2)
+(defvar ess-sas-tab-if-else-width 2)
 (defvar ess-sas-indent-end-to-match-do nil)
 
 (defun ess-sas-is-between (first last &optional eof)
@@ -111,8 +112,8 @@ If eof is nil, then the last position is:
 	(forward-char -1))
     (re-search-backward ";" nil t)
     ;; Break out of comments
-    (while (ess-sas-is-between "/\\*" "\\*/")
-      (re-search-backward ";" nil t))
+    ;; (while (ess-sas-is-between "/\\*" "\\*/")
+    ;;   (re-search-backward ";" nil t))
     (skip-chars-forward "\t\n\f; ")
     (while (and cont (looking-at "/\\*"))
       (if (not (re-search-forward "\\*/" nil t))
@@ -189,31 +190,14 @@ If eof is nil, then the last position is:
 	    (setq indent-length-b (+ ess-sas-tab-if-else-width indent-length-a))))
       (setq in-statement (string-match "[^ \t\n\f]" (buffer-substring bosas p)))
       (setq indent-length-a nil)
-					; Now look for last stop word.
-					; Make sure the stop word is not in a comment/string.
-					;      (setq cont 't)
-					;      (if (not 
-					;	   (re-search-backward (format "\\(?:\\(?:;\\|\\*/\\)[\t\n\f ]*\\<\\(?:%s\\)\\>\\|\\<do\\>\\)" sasstop) nil t)
-					;	   ) nil
-					;	(setq tmp (match-string 0))
-					;	(while (and 
-					;		(string-match "\\<do\\>" tmp) (and
-					;		(memq (get-text-property (point) 'face) '(font-lock-comment-face font-lock-string-face))
-					;		(re-search-backward (format "\\(?:\\(?:;\\|\\*/\\)[\t\n\f ]*\\<\\(?:%s\\)\\>\\|\\<do\\>\\)" sasstop) nil t)
-					;		  ))
-					;	  (setq tmp (match-string 0))
-					;	  (setq cont 't)
-					;	  )
-					;	(setq cont nil)
-					;	)
-      (if (not (re-search-backward (format "\\(?:\\(?:;\\|\\*/\\)[\t\n\f ]*\\<\\(?:%s\\)\\>\\|\\<do\\>\\)" sasstop) nil t)) nil 
+      (if (not (re-search-backward (format "\\(?:\\(?:;\\|\\*/\\|\\`\\)[\t\n\f ]*\\<\\(?:%s\\)\\>\\|\\<do\\>\\)" sasstop) nil t)) nil 
 	(setq tmp (match-string 0))
 	(while (and 
 		(string= "do" tmp)
 		(memq (get-text-property (point) 'face) '(font-lock-comment-face font-lock-string-face)))
-	  (if (re-search-backward (format "\\(?:\\(?:;\\|\\*/\\)[\t\n\f ]*\\<\\(?:%s\\)\\>\\|\\<do\\>\\)" sasstop) nil t)
+	  (if (re-search-backward (format "\\(?:\\(?:;\\|\\*/\\|\\`\\)[\t\n\f ]*\\<\\(?:%s\\)\\>\\|\\<do\\>\\)" sasstop) nil t)
 	      (setq tmp (match-string 0))
-	    (setq tmp "")))
+            (goto-char (bobp))))
 	;; Ok found stop word.
 	(if (looking-at "\\*/")
 	    (forward-char 2))
@@ -222,9 +206,7 @@ If eof is nil, then the last position is:
 	      (ess-sas-bo-sas)
 	      (beginning-of-line)
 	      (if (not (looking-at "^[ \t]*")) nil
-		(setq indent-length-a (+ (length (ess-sas-detab (match-string 0))) ess-sas-tab-width))
-		)
-	      )
+		(setq indent-length-a (+ (length (ess-sas-detab (match-string 0))) ess-sas-tab-width))))
 	  (skip-chars-forward "\t\n\f ;")
 	  (if (not (looking-at (format "\\<\\(?:%s\\)\\>" sasi))) 
 	      (progn
@@ -252,17 +234,17 @@ If eof is nil, then the last position is:
 		(if (looking-at (format "^[ \t]*\\<\\(?:%s\\)\\>" sasd))
 		    (progn
 		      (setq indent-length-a (- indent-length-a ess-sas-tab-width))))))))))
-    (if (and di indent-length-a)
-	(setq indent-length-a (- indent-length-a ess-sas-tab-width)))
-    (if (and ess-sas-indent-end-to-match-do (and di last-end))
-	(setq indent-length-a (+ indent-length-a ess-sas-tab-if-else-width)))
-					;    (message "Indent: %s" indent-length-a)
-    ;; First rule, if not ending a SAS statment do a hanging indent.
-    (if (or (not in-statement) (= bosasl bol)) 
-	(progn
-	  (if indent-length-a
-	      (ess-sas-indent-line-to indent-length-a)))
-      (ess-sas-indent-line-to indent-length-b))))
+    (cond
+     ((and di indent-length-a)
+      (setq indent-length-a (- indent-length-a ess-sas-tab-width)))
+     ((and ess-sas-indent-end-to-match-do (and di last-end))
+      (setq indent-length-a (+ indent-length-a ess-sas-tab-if-else-width))))
+    (if (or (not in-statement) (= bosasl bol))
+        ;; Hanging indent
+        (if indent-length-a
+            (ess-sas-indent-line-to indent-length-a))
+      (ess-sas-indent-line-to indent-length-b))
+    ))
 
 (defun ess-sas-indent-line-to (arg)
   "Indents a line to the length using spaces only (sometimes tabs cause problems..."
